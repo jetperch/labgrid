@@ -765,6 +765,55 @@ Arguments:
 Used by:
   - `SigrokDriver`_
 
+JoulescopeDevice
+~~~~~~~~~~~~~~~~
+A :any:`JoulescopeDevice` resource describes a *Joulescope* energy analyzer
+(JS110, JS220 or JS320).  It is a USB resource, so a specific device is selected
+via udev matching when more than one Joulescope is connected; with a single
+Joulescope an empty match is sufficient.  The device is then addressed through
+``pyjoulescope_driver``.
+
+.. code-block:: yaml
+
+   JoulescopeDevice:
+     match:
+       ID_SERIAL_SHORT: 'S3C8'
+
+Arguments:
+  - match (dict): key and value pairs for a udev match, see `udev Matching`_
+
+Used by:
+  - `JoulescopeDriver`_
+
+NetworkJoulescopeDevice
+~~~~~~~~~~~~~~~~~~~~~~~~~
+A :any:`NetworkJoulescopeDevice` resource describes a `JoulescopeDevice`_ that is
+attached to and exported by another host, making it usable over labgrid's
+distributed infrastructure.  It is created automatically when a `JoulescopeDevice`_
+is exported and acquired via a `RemotePlace`_, so it is not usually configured
+directly.  The `JoulescopeDriver`_ runs ``pyjoulescope_driver`` on the exporting
+host through the labgrid agent, so only that host needs the ``joulescope`` extra
+installed.
+
+.. note::
+   The labgrid agent is started on the exporting host over SSH as
+   ``python3 <agent>``, so the ``python3`` found on that host's *non-interactive*
+   SSH ``PATH`` must be able to import ``pyjoulescope_driver`` (and ``pyjls`` for
+   high-rate sample capture).  Installing the
+   ``joulescope`` extra into a virtualenv that is only activated for an
+   interactive shell is not sufficient; install it into the interpreter on the
+   default ``PATH`` (or make that virtualenv's ``python3`` the default).  This is
+   the same requirement as for other agent-based USB devices (for example the
+   ``pyusb`` dependency of the HID and Deditec relays).
+
+Arguments:
+  - host (str): hostname of the exporter the device is attached to
+  - serial (str): the Joulescope serial number
+  - model (str): the Joulescope model (``js110``, ``js220`` or ``js320``)
+
+Used by:
+  - `JoulescopeDriver`_
+
 IMXUSBLoader
 ~~~~~~~~~~~~
 An :any:`IMXUSBLoader` resource describes a USB device in the imx loader state.
@@ -3190,6 +3239,55 @@ samples is an iterable of samples.
 
 This driver relies on buffering of the subprocess call.
 Reading a few samples will very likely work - but obtaining a lot of samples may stall.
+
+JoulescopeDriver
+~~~~~~~~~~~~~~~~
+The :any:`JoulescopeDriver` uses a `JoulescopeDevice`_ or
+`NetworkJoulescopeDevice`_ resource to measure current, voltage and power,
+accumulate charge and energy, capture high-rate samples to a JLS file, and switch
+downstream power by connecting/disconnecting the device current path.
+
+``pyjoulescope_driver`` runs on the host the Joulescope is attached to (via the
+labgrid agent), so only that host needs the ``joulescope`` extra installed.  For a
+`NetworkJoulescopeDevice`_ a captured JLS file is recorded on the exporting host
+and copied back to the client.
+
+Binds to:
+  device:
+    - `JoulescopeDevice`_
+    - `NetworkJoulescopeDevice`_
+
+Implements:
+  - :any:`EnergyAnalyzerProtocol`
+  - :any:`PowerProtocol`
+
+.. code-block:: yaml
+
+   JoulescopeDriver:
+     frequency: 10.0
+     delay: 2.0
+
+Arguments:
+  - frequency (float, default=2.0): statistics update frequency in Hz
+  - delay (float, default=2.0): delay in seconds between off and on during a
+    power cycle
+
+The latest measurement is read with ``get_statistics()``, which returns a dict
+with ``current``, ``voltage`` and ``power`` sub-dicts (each with ``avg``,
+``std``, ``min`` and ``max``) plus the accumulated ``charge_C`` (Coulombs) and
+``energy_J`` (Joules).
+``start()`` and ``stop()`` bracket a charge/energy accumulation window;
+``stop()`` returns the accumulated ``energy_J``, ``charge_C`` and the
+``duration_s`` of the window.
+``capture(filename, signals=None, duration=..., frequency=None)`` records
+high-rate samples to a JLS file for the requested duration.  ``frequency`` (in
+Hz) sets the device sample rate and is sticky: once set it stays in effect for
+later captures on the same activated driver until changed again, rather than
+reverting to the device default.
+
+Power switching via ``on()``, ``off()`` and ``cycle()`` connects and
+disconnects the device current path, controlling downstream power to the
+device under test.
 
 USBSDMuxDriver
 ~~~~~~~~~~~~~~
