@@ -779,6 +779,14 @@ Joulescope an empty match is sufficient.  The device is then addressed through
      match:
        ID_SERIAL_SHORT: 'S3C8'
 
+You need to ensure proper udev permissions:
+
+.. code-block:: bash
+
+   wget https://raw.githubusercontent.com/jetperch/joulescope_driver/refs/heads/main/72-joulescope.rules
+   sudo cp 72-joulescope.rules /etc/udev/rules.d/
+   sudo udevadm control --reload-rules
+
 Arguments:
   - match (dict): key and value pairs for a udev match, see `udev Matching`_
 
@@ -787,32 +795,8 @@ Used by:
 
 NetworkJoulescopeDevice
 ~~~~~~~~~~~~~~~~~~~~~~~~~
-A :any:`NetworkJoulescopeDevice` resource describes a `JoulescopeDevice`_ that is
-attached to and exported by another host, making it usable over labgrid's
-distributed infrastructure.  It is created automatically when a `JoulescopeDevice`_
-is exported and acquired via a `RemotePlace`_, so it is not usually configured
-directly.  The `JoulescopeDriver`_ runs ``pyjoulescope_driver`` on the exporting
-host through the labgrid agent, so only that host needs the ``joulescope`` extra
-installed.
-
-.. note::
-   The labgrid agent is started on the exporting host over SSH as
-   ``python3 <agent>``, so the ``python3`` found on that host's *non-interactive*
-   SSH ``PATH`` must be able to import ``pyjoulescope_driver`` (and ``pyjls`` for
-   high-rate sample capture).  Installing the
-   ``joulescope`` extra into a virtualenv that is only activated for an
-   interactive shell is not sufficient; install it into the interpreter on the
-   default ``PATH`` (or make that virtualenv's ``python3`` the default).  This is
-   the same requirement as for other agent-based USB devices (for example the
-   ``pyusb`` dependency of the HID and Deditec relays).
-
-Arguments:
-  - host (str): hostname of the exporter the device is attached to
-  - serial (str): the Joulescope serial number
-  - model (str): the Joulescope model (``js110``, ``js220`` or ``js320``)
-
-Used by:
-  - `JoulescopeDriver`_
+A :any:`NetworkJoulescopeDevice` resource describes a `JoulescopeDevice`_ resource
+available on a remote computer.
 
 IMXUSBLoader
 ~~~~~~~~~~~~
@@ -3246,11 +3230,6 @@ The :any:`JoulescopeDriver` uses a `JoulescopeDevice`_ or
 `NetworkJoulescopeDevice`_ resource to measure current, voltage and power,
 accumulate charge and energy, capture high-rate samples to a JLS file, and switch
 downstream power by connecting/disconnecting the device current path.
-
-``pyjoulescope_driver`` runs on the host the Joulescope is attached to (via the
-labgrid agent), so only that host needs the ``joulescope`` extra installed.  For a
-`NetworkJoulescopeDevice`_ a captured JLS file is recorded on the exporting host
-and copied back to the client.
 
 Binds to:
   device:
